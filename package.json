@@ -9,19 +9,32 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@mendable/firecrawl-js": "^1.21.1",
+    "@types/ws": "^8.18.1",
+    "dom-to-image": "^2.6.0",
+    "file-saver": "^2.0.5",
+    "groq-sdk": "^0.22.0",
+    "html-to-image": "^1.11.13",
+    "html2canvas": "^1.4.1",
+    "html2pdf.js": "^0.10.3",
+    "lucide-react": "^0.511.0",
+    "mermaid": "^11.6.0",
+    "next": "15.3.2",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "next": "15.3.2"
+    "ws": "^8.18.2"
   },
   "devDependencies": {
-    "typescript": "^5",
-    "@types/node": "^20",
+    "@eslint/eslintrc": "^3",
+    "@tailwindcss/postcss": "^4",
+    "@types/dom-to-image": "^2.6.7",
+    "@types/file-saver": "^2.0.7",
+    "@types/node": "^20.17.51",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "@tailwindcss/postcss": "^4",
-    "tailwindcss": "^4",
     "eslint": "^9",
     "eslint-config-next": "15.3.2",
-    "@eslint/eslintrc": "^3"
+    "tailwindcss": "^4",
+    "typescript": "^5"
   }
 }
