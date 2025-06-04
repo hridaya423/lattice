@@ -1,4 +1,4 @@
-# Topic Debater
+# Topic Analyzer
 
 A sophisticated AI-powered application that analyzes complex topics from multiple perspectives, plays devil's advocate, and provides comprehensive moral reasoning with real-time web research capabilities.
 
@@ -23,8 +23,8 @@ A sophisticated AI-powered application that analyzes complex topics from multipl
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/hridaya423/topicdebater.git
-   cd aidebater
+   git clone https://github.com/hridaya423/topicanalyzer.git
+   cd topicanalyzer
    ```
 
 2. **Install dependencies**
