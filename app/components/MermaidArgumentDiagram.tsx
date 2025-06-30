@@ -1,29 +1,37 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { ArgumentNode, ArgumentTree } from '../../types';
-import { X, Maximize2, Minimize2, Download, Eye, Code, RefreshCw, Loader2 } from 'lucide-react';
+import { X, Maximize2, Minimize2, Download, Eye, Code, RefreshCw, Loader2, Plus, Minus } from 'lucide-react';
 import MermaidRenderer from './MermaidRenderer';
 
 interface MermaidArgumentDiagramProps {
-  argumentTree?: ArgumentTree;
   topic?: string;
-  useAI?: boolean;
   diagramType?: 'argument-flow' | 'stakeholder-analysis' | 'decision-tree' | 'process-flow';
   onClose: () => void;
   className?: string;
+  onAiDiagramTypeChange?: (type: 'argument-flow' | 'stakeholder-analysis' | 'decision-tree' | 'process-flow') => void;
+  onToggleExpansion?: () => void;
+  isExpanded?: boolean;
+  showReadings?: boolean;
+  detailLevel?: number;
+  onDetailLevelChange?: (level: number) => void;
 }
 
 const MermaidArgumentDiagram: React.FC<MermaidArgumentDiagramProps> = ({ 
-  argumentTree,
   topic,
-  useAI = false,
   diagramType = 'argument-flow',
   onClose, 
-  className = '' 
+  className = '',
+  onAiDiagramTypeChange,
+  onToggleExpansion,
+  isExpanded = false,
+  showReadings = false,
+  detailLevel = 0,
+  onDetailLevelChange
 }) => {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [mermaidCode, setMermaidCode] = useState('');
+  const [diagramLevels, setDiagramLevels] = useState<{[key: number]: string}>({}); 
   const [activeTab, setActiveTab] = useState<'visual' | 'code'>('visual');
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -42,7 +50,7 @@ const MermaidArgumentDiagram: React.FC<MermaidArgumentDiagramProps> = ({
         },
         body: JSON.stringify({ 
           topic, 
-          diagramType 
+          diagramType
         }),
       });
 
@@ -52,7 +60,9 @@ const MermaidArgumentDiagram: React.FC<MermaidArgumentDiagramProps> = ({
         throw new Error(data.error || 'Failed to generate diagram');
       }
 
-      setMermaidCode(data.mermaidCode);
+      const generatedCode = data.mermaidCode;
+      setMermaidCode(generatedCode);
+      setDiagramLevels(prev => ({ ...prev, 0: generatedCode })); 
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An unknown error occurred');
       console.error('Error generating diagram:', err);
@@ -61,127 +71,80 @@ const MermaidArgumentDiagram: React.FC<MermaidArgumentDiagramProps> = ({
     }
   };
 
-  const generateTraditionalDiagram = () => {
-    if (!argumentTree) return;
-
-    const lines: string[] = ['graph TD'];
-    const processedNodes = new Set<string>();
-    
-    
-    lines.push('  classDef supporting fill:#dcfce7,stroke:#16a34a,stroke-width:2px,color:#000');
-    lines.push('  classDef opposing fill:#fef2f2,stroke:#dc2626,stroke-width:2px,color:#000');
-    lines.push('  classDef evidence fill:#fefce8,stroke:#ca8a04,stroke-width:2px,color:#000');
-    lines.push('  classDef neutral fill:#f8fafc,stroke:#64748b,stroke-width:2px,color:#000');
-    lines.push('  classDef utilitarian fill:#fed7aa,stroke:#ea580c,stroke-width:2px,color:#000');
-    lines.push('  classDef deontological fill:#dbeafe,stroke:#2563eb,stroke-width:2px,color:#000');
-    lines.push('  classDef virtue fill:#e9d5ff,stroke:#9333ea,stroke-width:2px,color:#000');
-    lines.push('');
-
-    const processNode = (node: ArgumentNode, parentId?: string) => {
-      if (processedNodes.has(node.id)) return;
-      processedNodes.add(node.id);
-
-      
-      const truncatedText = truncateText(node.text, 40);
-      const nodeShape = getNodeShape(node, truncatedText);
-      
-      
-      lines.push(`  ${node.id}${nodeShape}`);
-      
-      
-      if (parentId) {
-        const connectionStyle = getConnectionStyle(node);
-        lines.push(`  ${parentId} ${connectionStyle} ${node.id}`);
-      }
-
-      
-      node.children.forEach(child => {
-        processNode(child, node.id);
-      });
-    };
-
-    
-    processNode(argumentTree.rootNode);
-
-    
-    lines.push('');
-    const addClassAssignments = (node: ArgumentNode) => {
-      const cssClass = getNodeClass(node);
-      if (cssClass) {
-        lines.push(`  class ${node.id} ${cssClass}`);
-      }
-      node.children.forEach(addClassAssignments);
-    };
-    addClassAssignments(argumentTree.rootNode);
-
-    setMermaidCode(lines.join('\n'));
-  };
 
   useEffect(() => {
-    if (useAI && topic) {
+    if (topic) {
       generateAIDiagram();
-    } else if (!useAI && argumentTree) {
-      generateTraditionalDiagram();
     }
-  }, [useAI, topic, diagramType, argumentTree]);
+  }, [topic, diagramType]);
+  
+  
+  useEffect(() => {
+    if (diagramLevels[detailLevel]) {
+      
+      setMermaidCode(diagramLevels[detailLevel]);
+    } else if (detailLevel !== 0 && diagramLevels[0]) {
+      
+      enhanceDiagram();
+    }
+  }, [detailLevel]);
+
+  const enhanceDiagram = async () => {
+    if (!diagramLevels[0]) return; 
+    
+    setIsGenerating(true);
+    setError(null);
+    
+    try {
+      const response = await fetch('/api/generate-diagram', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          topic, 
+          diagramType,
+          existingDiagram: diagramLevels[0],
+          enhanceMode: true,
+          targetComplexity: detailLevel > 0 ? 'more_complex' : 'simpler'
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to enhance diagram');
+      }
+
+      const enhancedCode = data.mermaidCode;
+      setMermaidCode(enhancedCode);
+      setDiagramLevels(prev => ({ ...prev, [detailLevel]: enhancedCode }));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An unknown error occurred');
+      console.error('Error enhancing diagram:', err);
+      
+      const fallbackCode = diagramLevels[0];
+      setMermaidCode(fallbackCode);
+    } finally {
+      setIsGenerating(false);
+    }
+  };
 
   const regenerateDiagram = () => {
-    if (useAI) {
+    if (detailLevel === 0) {
       generateAIDiagram();
     } else {
-      generateTraditionalDiagram();
+      enhanceDiagram();
     }
   };
 
-  const truncateText = (text: string, maxLength: number): string => {
-    if (text.length <= maxLength) return text;
-    return text.substring(0, maxLength - 3) + '...';
-  };
-
-  const getNodeShape = (node: ArgumentNode, text: string): string => {
-    const escapedText = text.replace(/"/g, '#quot;').replace(/\n/g, '<br/>');
-    
-    switch (node.type) {
-      case 'supporting':
-        return `["${escapedText}"]`;
-      case 'opposing':
-      case 'counterargument':
-        return `{"${escapedText}"}`;
-      case 'evidence':
-        return `(("${escapedText}"))`;
-      default:
-        return `["${escapedText}"]`;
-    }
-  };
-
-  const getConnectionStyle = (node: ArgumentNode): string => {
-    switch (node.type) {
-      case 'supporting':
-        return '-->|supports|';
-      case 'opposing':
-      case 'counterargument':
-        return '-.->|opposes|';
-      case 'evidence':
-        return '-->|evidence|';
-      default:
-        return '-->';
-    }
-  };
-
-  const getNodeClass = (node: ArgumentNode): string => {
-    // Framework takes precedence over type for coloring
-    if (node.framework) {
-      return node.framework;
-    }
-    return node.type;
-  };
 
   const downloadDiagram = () => {
     const blob = new Blob([mermaidCode], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${useAI ? diagramType : 'argument'}-diagram.mmd`;
+    a.download = `${diagramType}-diagram.mmd`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -197,52 +160,67 @@ const MermaidArgumentDiagram: React.FC<MermaidArgumentDiagramProps> = ({
   };
 
   return (
-    <div className={`bg-black dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden ${className} ${ 
+    <div className={`bg-[var(--card-bg)] border border-[var(--input-border)] rounded-lg overflow-hidden ${className} ${ 
       isFullscreen ? 'fixed inset-4 z-50' : ''
     }`}>
-      <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700 bg-black dark:bg-gray-750">
+      <div className="flex items-center justify-between p-4 border-b border-[var(--input-border)] bg-[var(--surface-elevated)]">
         <div className="flex items-center gap-4">
           <div>
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-              {useAI ? `AI-Generated ${diagramType.charAt(0).toUpperCase() + diagramType.slice(1).replace('-', ' ')} Diagram` : 'Argument Flow Diagram'}
+            <h3 className="text-lg font-semibold text-[var(--foreground)]">
+              {diagramType.charAt(0).toUpperCase() + diagramType.slice(1).replace('-', ' ')} Diagram
             </h3>
-            <div className="text-sm text-gray-600 dark:text-gray-400">
-              {useAI ? `Topic: ${topic}` : `${argumentTree?.totalNodes} nodes • ${argumentTree?.maxDepth} levels`}
-            </div>
           </div>
           
-          <div className="flex bg-white dark:bg-gray-800 rounded-lg p-1 border border-gray-200 dark:border-gray-600">
+          
+          {onAiDiagramTypeChange && (
+            <div className={`${isExpanded ? 'scale-110' : ''} transition-transform`}>
+              <select
+                value={diagramType}
+                onChange={(e) => onAiDiagramTypeChange(e.target.value as 'argument-flow' | 'stakeholder-analysis' | 'decision-tree' | 'process-flow')}
+                className={`px-3 py-2 rounded-lg text-sm bg-[var(--input-bg)] text-[var(--foreground)] border border-[var(--input-border)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)] ${isExpanded ? 'min-w-[180px]' : 'min-w-[160px]'} transition-all`}
+              >
+                <option value="argument-flow">Argument Flow</option>
+                <option value="stakeholder-analysis">Stakeholder Analysis</option>
+                <option value="decision-tree">Decision Tree</option>
+                <option value="process-flow">Process Flow</option>
+              </select>
+            </div>
+          )}
+        </div>
+        
+        <div className="flex items-center gap-3">
+          
+          <div className="flex bg-[var(--input-bg)] rounded-lg p-1 border border-[var(--input-border)]">
             <button
               onClick={() => setActiveTab('visual')}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+              className={`flex items-center gap-2 ${showReadings && !isExpanded ? 'px-2 py-1.5' : 'px-3 py-1.5'} rounded-md text-sm font-medium transition-colors ${
                 activeTab === 'visual'
-                  ? 'bg-blue-500 text-white'
-                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                  ? 'bg-[var(--accent)] text-white'
+                  : 'text-[var(--text-secondary)] hover:text-[var(--foreground)]'
               }`}
             >
               <Eye className="w-4 h-4" />
-              Visual
+              {(!showReadings || isExpanded) && 'Visual'}
             </button>
             <button
               onClick={() => setActiveTab('code')}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+              className={`flex items-center gap-2 ${showReadings && !isExpanded ? 'px-2 py-1.5' : 'px-3 py-1.5'} rounded-md text-sm font-medium transition-colors ${
                 activeTab === 'code'
-                  ? 'bg-blue-500 text-white'
-                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                  ? 'bg-[var(--accent)] text-white'
+                  : 'text-[var(--text-secondary)] hover:text-[var(--foreground)]'
               }`}
             >
               <Code className="w-4 h-4" />
-              Code
+              {(!showReadings || isExpanded) && 'Code'}
             </button>
           </div>
-        </div>
-        
-        <div className="flex items-center gap-2">
-          {useAI && (
+          
+          
+          <div className="flex items-center gap-2">
             <button
               onClick={regenerateDiagram}
               disabled={isGenerating}
-              className="flex items-center gap-2 px-3 py-1.5 text-sm bg-blue-500 text-white rounded-md hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className={`flex items-center gap-2 ${showReadings && !isExpanded ? 'px-2 py-2' : 'px-3 py-2'} text-sm bg-[var(--accent)] text-white rounded-lg hover:bg-[var(--accent)]/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors`}
               title="Regenerate Diagram"
             >
               {isGenerating ? (
@@ -250,53 +228,76 @@ const MermaidArgumentDiagram: React.FC<MermaidArgumentDiagramProps> = ({
               ) : (
                 <RefreshCw className="w-4 h-4" />
               )}
-              {isGenerating ? 'Generating...' : 'Regenerate'}
+              {(!showReadings || isExpanded) && (isGenerating ? 'Generating...' : 'Regenerate')}
             </button>
-          )}
-          
-          <button
-            onClick={downloadDiagram}
-            disabled={!mermaidCode || isGenerating}
-            className="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors disabled:opacity-50"
-            title="Download Mermaid Code"
-          >
-            <Download className="w-4 h-4" />
-          </button>
-          
-          <button
-            onClick={() => setIsFullscreen(!isFullscreen)}
-            className="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
-            title={isFullscreen ? "Exit Fullscreen" : "Fullscreen"}
-          >
-            {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-          </button>
-          
-          <button
-            onClick={onClose}
-            className="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
-            title="Close Diagram"
-          >
-            <X className="w-4 h-4" />
-          </button>
+            
+            <button
+              onClick={downloadDiagram}
+              disabled={!mermaidCode || isGenerating}
+              className="p-2 text-[var(--text-secondary)] hover:text-[var(--foreground)] hover:bg-[var(--input-bg)] rounded-lg transition-colors disabled:opacity-50"
+              title="Download Mermaid Code"
+            >
+              <Download className="w-4 h-4" />
+            </button>
+
+            {onDetailLevelChange && (
+              <>
+                <button
+                  onClick={() => onDetailLevelChange(Math.max(-2, detailLevel - 1))}
+                  disabled={isGenerating || detailLevel <= -2}
+                  className="p-2 text-[var(--text-secondary)] hover:text-[var(--foreground)] hover:bg-[var(--input-bg)] rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Simplify Diagram"
+                >
+                  <Minus className="w-4 h-4" />
+                </button>
+                
+                <button
+                  onClick={() => onDetailLevelChange(Math.min(10, detailLevel + 1))}
+                  disabled={isGenerating || detailLevel >= 10}
+                  className="p-2 text-[var(--text-secondary)] hover:text-[var(--foreground)] hover:bg-[var(--input-bg)] rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Add More Detail"
+                >
+                  <Plus className="w-4 h-4" />
+                </button>
+              </>
+            )}
+            
+            
+            <button
+              onClick={onToggleExpansion || (() => setIsFullscreen(!isFullscreen))}
+              className="p-2 text-[var(--text-secondary)] hover:text-[var(--foreground)] hover:bg-[var(--input-bg)] rounded-lg transition-colors"
+              title={isExpanded || isFullscreen ? "Collapse" : "Expand"}
+            >
+              {isExpanded || isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+            </button>
+            
+            <button
+              onClick={onClose}
+              className="p-2 text-[var(--text-secondary)] hover:text-[var(--foreground)] hover:bg-[var(--input-bg)] rounded-lg transition-colors"
+              title="Close Diagram"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       </div>
 
       <div className="relative" style={{ height: 'calc(100vh - 200px)', minHeight: '500px' }}>
         {activeTab === 'visual' && (
           <>
-            {(isGenerating || (!mermaidCode && useAI)) && (
-              <div className="absolute inset-0 bg-white dark:bg-gray-800 bg-opacity-75 flex items-center justify-center z-10">
+            {(isGenerating || !mermaidCode) && (
+              <div className="absolute inset-0 bg-[var(--card-bg)] bg-opacity-90 flex items-center justify-center z-10">
                 <div className="text-center">
-                  <Loader2 className="w-8 h-8 animate-spin text-blue-500 mx-auto mb-2" />
-                  <div className="text-sm text-gray-600 dark:text-gray-400">
-                    {useAI ? 'Generating detailed diagram with AI...' : 'Processing diagram...'}
+                  <Loader2 className="w-8 h-8 animate-spin text-[var(--accent)] mx-auto mb-2" />
+                  <div className="text-sm text-[var(--text-secondary)]">
+                    Generating detailed diagram with AI...
                   </div>
                 </div>
               </div>
             )}
             
             {error && (
-              <div className="absolute inset-0 bg-white dark:bg-gray-800 flex items-center justify-center">
+              <div className="absolute inset-0 bg-[var(--card-bg)] flex items-center justify-center">
                 <div className="text-center p-6">
                   <div className="text-red-500 mb-2">⚠️</div>
                   <div className="text-sm text-red-600 dark:text-red-400">
@@ -304,7 +305,7 @@ const MermaidArgumentDiagram: React.FC<MermaidArgumentDiagramProps> = ({
                   </div>
                   <button
                     onClick={regenerateDiagram}
-                    className="mt-3 px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors"
+                    className="mt-3 px-4 py-2 bg-[var(--accent)] text-white rounded-md hover:bg-[var(--accent-light)] transition-colors"
                   >
                     Try Again
                   </button>
@@ -326,33 +327,33 @@ const MermaidArgumentDiagram: React.FC<MermaidArgumentDiagramProps> = ({
             {isGenerating ? (
               <div className="flex items-center justify-center h-full">
                 <div className="text-center">
-                  <Loader2 className="w-8 h-8 animate-spin text-blue-500 mx-auto mb-2" />
-                  <div className="text-sm text-gray-600 dark:text-gray-400">
+                  <Loader2 className="w-8 h-8 animate-spin text-[var(--accent)] mx-auto mb-2" />
+                  <div className="text-sm text-[var(--text-secondary)]">
                     Generating Mermaid code...
                   </div>
                 </div>
               </div>
             ) : error ? (
               <div className="flex items-center justify-center h-full">
-                <div className="text-center text-red-600 dark:text-red-400">
+                <div className="text-center text-[var(--accent)]">
                   Error: {error}
                 </div>
               </div>
             ) : (
               <>
                 <div className="flex justify-between items-center mb-3">
-                  <h4 className="text-sm font-medium text-gray-900 dark:text-white">
+                  <h4 className="text-sm font-medium text-[var(--foreground)]">
                     Mermaid Code
                   </h4>
                   <button
                     onClick={copyToClipboard}
                     disabled={!mermaidCode}
-                    className="px-3 py-1 text-xs bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors disabled:opacity-50"
+                    className="px-3 py-1 text-xs bg-[var(--input-bg)] text-[var(--text-secondary)] rounded-md hover:bg-[var(--input-border)] transition-colors disabled:opacity-50"
                   >
                     Copy
                   </button>
                 </div>
-                <pre className="bg-gray-100 dark:bg-gray-900 p-3 rounded-md overflow-auto text-xs font-mono text-gray-800 dark:text-gray-200 border">
+                <pre className="bg-[var(--input-bg)] p-3 rounded-md overflow-auto text-xs font-mono text-[var(--foreground)] border border-[var(--input-border)]">
                   <code>{mermaidCode || 'No code generated yet'}</code>
                 </pre>
               </>

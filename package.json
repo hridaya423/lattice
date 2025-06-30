@@ -9,7 +9,6 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "@mendable/firecrawl-js": "^1.21.1",
     "@types/ws": "^8.18.1",
     "dom-to-image": "^2.6.0",
     "file-saver": "^2.0.5",
@@ -22,6 +21,7 @@
     "next": "15.3.2",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "serper": "^1.0.6",
     "ws": "^8.18.2"
   },
   "devDependencies": {

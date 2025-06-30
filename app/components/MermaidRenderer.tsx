@@ -225,12 +225,6 @@ const MermaidRenderer: React.FC<MermaidRendererProps> = ({ chart, className = ''
   useEffect(() => {
     const renderDiagram = async () => {
       if (!elementRef.current || !chart || !isInitialized) {
-        if (isInitialized && chart && !elementRef.current) {
-          setError("Diagram container not found");
-          setIsLoading(false);
-        } else if (isInitialized && !chart) {
-          setIsLoading(false); 
-        }
         return;
       }
 
@@ -292,7 +286,7 @@ const MermaidRenderer: React.FC<MermaidRendererProps> = ({ chart, className = ''
 
     if (isInitialized) {
       if (chart && isLoading) {
-        setIsLoading(false);
+        setIsLoading(false)
         return;
       }
       if (chart && !isLoading && !error) {
@@ -300,11 +294,10 @@ const MermaidRenderer: React.FC<MermaidRendererProps> = ({ chart, className = ''
       } else if (!chart) {
         if (elementRef.current) {
           elementRef.current.innerHTML = '';
-        }
-        if (isLoading) setIsLoading(false);
       }
+      if (isLoading) setIsLoading(false);
     }
-  }, [chart, isInitialized, isLoading, error, zoom, validateMermaidSyntax]);
+ }}, [chart, isInitialized, isLoading, error, zoom, validateMermaidSyntax]);
 
   
   const handleZoomIn = useCallback(() => {
@@ -461,4 +454,4 @@ const MermaidRenderer: React.FC<MermaidRendererProps> = ({ chart, className = ''
   );
 };
 
-export default MermaidRenderer; 
+export default MermaidRenderer;

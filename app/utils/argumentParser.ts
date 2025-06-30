@@ -5,7 +5,7 @@ export function parseArgumentsFromResponse(content: string): ArgumentTree | null
     const lines = content.split('\n').filter(line => line.trim());
     const rootNode: ArgumentNode = {
       id: 'root',
-      text: 'Ethical Analysis',
+      text: 'Multi-Perspective Analysis',
       type: 'neutral',
       children: [],
       level: 0
@@ -93,9 +93,9 @@ function detectFrameworkFromPerspective(perspectiveName: string): ArgumentNode['
   const lowerName = perspectiveName.toLowerCase();
   
   
-  if (lowerName.includes('utilitarian') || lowerName.includes('greatest good')) return 'utilitarian';
-  if (lowerName.includes('deontological') || lowerName.includes('duty') || lowerName.includes('rights')) return 'deontological';
-  if (lowerName.includes('virtue') || lowerName.includes('character')) return 'virtue';
+  if (lowerName.includes('consequence-based') || lowerName.includes('greatest good')) return 'consequence-based';
+  if (lowerName.includes('rule-based') || lowerName.includes('duty') || lowerName.includes('rights')) return 'rule-based';
+  if (lowerName.includes('character-based') || lowerName.includes('character')) return 'character-based';
   
   
   if (lowerName.includes('practical') || lowerName.includes('implementation')) return 'practical';

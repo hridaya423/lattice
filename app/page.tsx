@@ -1,606 +1,288 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
-import { Send, MessageSquare, User, Bot, RotateCcw, Lightbulb, ChevronDown, ChevronUp, BookOpen, Download, FileText, TreePine, ChevronLeft, ChevronRight } from 'lucide-react';
-import { Message, ConversationState } from '../types';
-import ReadingSuggestions from './components/ReadingSuggestions';
-import ArgumentTreeComponent from './components/ArgumentTree';
-import MermaidArgumentDiagram from './components/MermaidArgumentDiagram';
-import { exportToMarkdown, exportToPDF } from './utils/exportUtils';
+import { useState } from 'react';
+import { ArrowRight, MessageSquare, TreePine, BookOpen, Lightbulb, Target } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import Image from 'next/image';
+import Footer from './components/Footer';
 
-export default function AIDebater() {
-  const [state, setState] = useState<ConversationState>({
-    scenario: null,
-    messages: [],
-    isLoading: false,
-    hasAnalysis: false,
-  });
-  
-  const [inputText, setInputText] = useState('');
-  const [followUpQuestion, setFollowUpQuestion] = useState('');
-  const [expandedMessages, setExpandedMessages] = useState<Set<number>>(new Set());
-  const [isExporting, setIsExporting] = useState<'pdf' | 'markdown' | null>(null);
-  const [showArgumentTree, setShowArgumentTree] = useState(false);
-  const [showMermaidDiagram, setShowMermaidDiagram] = useState(false);
-  const [diagramType, setDiagramType] = useState<'traditional' | 'ai-generated'>('traditional');
-  const [aiDiagramType, setAiDiagramType] = useState<'argument-flow' | 'stakeholder-analysis' | 'decision-tree' | 'process-flow'>('argument-flow');
-  const [chatCollapsed, setChatCollapsed] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
-  useEffect(() => {
-    scrollToBottom();
-  }, [state.messages]);
-
-  const toggleMessageExpansion = (index: number) => {
-    const newExpanded = new Set(expandedMessages);
-    if (newExpanded.has(index)) {
-      newExpanded.delete(index);
-    } else {
-      newExpanded.add(index);
-    }
-    setExpandedMessages(newExpanded);
-  };
-
-  const parseResponse = (content: string) => {
-    const summaryMatch = content.match(/SUMMARY:\s*([\s\S]*?)(?=DETAILED ANALYSIS:|$)/);
-    const detailedMatch = content.match(/DETAILED ANALYSIS:\s*([\s\S]*)/);
-    
-    return {
-      summary: summaryMatch ? summaryMatch[1].trim() : content.substring(0, 200) + '...',
-      detailed: detailedMatch ? detailedMatch[1].trim() : content
-    };
-  };
-
-  const handleExport = async (format: 'pdf' | 'markdown') => {
-    if (!state.scenario || !state.messages.length) return;
-
-    setIsExporting(format);
-
-    try {
-      const exportData = {
-        scenario: state.scenario,
-        messages: state.messages,
-        timestamp: new Date()
-      };
-
-      if (format === 'pdf') {
-        await exportToPDF(exportData);
-      } else {
-        exportToMarkdown(exportData);
-      }
-    } catch (error) {
-      console.error(`Error exporting to ${format}:`, error);
-      
-    } finally {
-      setIsExporting(null);
-    }
-  };
-
-  const fetchReadingSuggestions = async () => {
-    if (!state.scenario) return;
-
-    setState(prev => ({
-      ...prev,
-      readingSuggestions: {
-        results: [],
-        isLoading: true,
-      }
-    }));
-
-    try {
-      const response = await fetch('/api/readings', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ topic: state.scenario }),
-      });
-
-      const data = await response.json();
-
-      if (data.error) {
-        throw new Error(data.error);
-      }
-
-      setState(prev => ({
-        ...prev,
-        readingSuggestions: {
-          results: data.results || [],
-          isLoading: false,
-        }
-      }));
-
-    } catch (error) {
-      console.error('Error fetching reading suggestions:', error);
-      setState(prev => ({
-        ...prev,
-        readingSuggestions: {
-          results: [],
-          isLoading: false,
-          error: 'Failed to load reading suggestions',
-        }
-      }));
-    }
-  };
-
-  const closeReadingSuggestions = () => {
-    setState(prev => ({
-      ...prev,
-      readingSuggestions: undefined,
-    }));
-  };
-
-  const analyzeScenario = async () => {
-    if (!inputText.trim()) return;
-
-    setState(prev => ({ ...prev, isLoading: true, scenario: inputText }));
-
-    try {
-      const response = await fetch('/api/debate', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ scenario: inputText }),
-      });
-
-      const data = await response.json();
-
-      if (data.error) {
-        throw new Error(data.error);
-      }
-
-      const newMessage: Message = {
-        role: 'assistant',
-        content: data.response,
-        timestamp: new Date(),
-        argumentTree: data.argumentTree,
-      };
-
-      setState(prev => ({
-        ...prev,
-        messages: [newMessage],
-        isLoading: false,
-        hasAnalysis: true,
-      }));
-
-    } catch (error) {
-      console.error('Error:', error);
-      setState(prev => ({
-        ...prev,
-        isLoading: false,
-      }));
-    }
-  };
-
-  const askFollowUp = async () => {
-    if (!followUpQuestion.trim() || !state.hasAnalysis) return;
-
-    const userMessage: Message = {
-      role: 'user',
-      content: followUpQuestion,
-      timestamp: new Date(),
-    };
-
-    setState(prev => ({
-      ...prev,
-      messages: [...prev.messages, userMessage],
-      isLoading: true,
-    }));
-
-    try {
-      const allMessages = [...state.messages, userMessage];
-      
-      const response = await fetch('/api/debate', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ 
-          scenario: state.scenario,
-          messages: allMessages 
-        }),
-      });
-
-      const data = await response.json();
-
-      if (data.error) {
-        throw new Error(data.error);
-      }
-
-      const aiMessage: Message = {
-        role: 'assistant',
-        content: data.response,
-        timestamp: new Date(),
-        argumentTree: data.argumentTree,
-      };
-
-      setState(prev => ({
-        ...prev,
-        messages: [...prev.messages, aiMessage],
-        isLoading: false,
-      }));
-
-      setFollowUpQuestion('');
-
-    } catch (error) {
-      console.error('Error:', error);
-      setState(prev => ({
-        ...prev,
-        isLoading: false,
-      }));
-    }
-  };
-
-  const resetDebate = () => {
-    setState({
-      scenario: null,
-      messages: [],
-      isLoading: false,
-      hasAnalysis: false,
-    });
-    setInputText('');
-    setFollowUpQuestion('');
-    setExpandedMessages(new Set());
-    setShowArgumentTree(false);
-    setShowMermaidDiagram(false);
-    setChatCollapsed(false);
-  };
+export default function LandingPage() {
+  const [selectedTopic, setSelectedTopic] = useState('');
+  const router = useRouter();
 
   const exampleTopics = [
     "Should AI systems be allowed to make autonomous decisions in healthcare?",
-    "Is genetic engineering of human embryos ethically justifiable?",
+    "Is genetic engineering of human embryos scientifically and socially justifiable?",
     "Should social media platforms be regulated as public utilities?",
     "Is universal basic income a viable solution to automation-driven unemployment?",
     "Should corporations have the same free speech rights as individuals?",
-    "Is it ethical for governments to use facial recognition technology for surveillance?"
+    "Is it appropriate for governments to use facial recognition technology for surveillance?"
   ];
 
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-[var(--background)]">
-      <div className="w-full max-w-7xl mx-auto px-2 py-10">
-        <div className="mb-8 text-center">
-          <div className="flex items-center justify-center gap-2 mb-2">
-            <MessageSquare className="w-7 h-7 text-[var(--accent)]" />
-            <span className="premium-header text-2xl sm:text-3xl">Topic Analyzer</span>
-          </div>
-          <p className="text-base sm:text-lg text-gray-500 max-w-xl mx-auto">
-            Multi-perspective analysis of complex topics. Present any scenario for a comprehensive, nuanced examination.
-          </p>
-        </div>
+  const features = [
+    {
+      icon: MessageSquare,
+      title: "Multi-Perspective Analysis",
+      description: "Examine complex topics through consequence-based, rule-based, character-based, and practical frameworks."
+    },
+    {
+      icon: TreePine,
+      title: "Visual Argument Mapping",
+      description: "Interactive diagrams that visualize argument structures and relationships between ideas."
+    },
+    {
+      icon: BookOpen,
+      title: "Research Discovery",
+      description: "AI-powered suggestions for relevant articles, papers, and resources to deepen your understanding."
+    }
+  ];
 
-        <div className="flex gap-6">
-          
-          <div className={`transition-all duration-300 ${
-            showMermaidDiagram ? (chatCollapsed ? 'w-1/3' : 'w-1/2') : 'flex-1'
-          } min-w-0`}>
-            <div className="premium-card p-0 overflow-hidden relative">
-              
-              {showMermaidDiagram && (
-                <button
-                  onClick={() => setChatCollapsed(!chatCollapsed)}
-                  className="absolute top-4 right-4 z-10 p-2 bg-[var(--input-bg)] hover:bg-[var(--accent-light)] rounded-lg border border-[var(--input-border)] transition-colors"
-                  title={chatCollapsed ? "Expand Chat" : "Collapse Chat"}
-                >
-                  {chatCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
-                </button>
-              )}
-              {!state.hasAnalysis ? (
-                <div className="p-6 sm:p-8">
-                  <div className="flex items-center gap-2 mb-4">
-                    <Lightbulb className="w-5 h-5 text-[var(--accent)]" />
-                    <h2 className="text-lg font-semibold text-[var(--foreground)]">Topic for Analysis</h2>
+  const handleStartAnalysis = (topic?: string) => {
+    const topicToAnalyze = topic || selectedTopic;
+    if (topicToAnalyze.trim()) {
+      
+      router.push(`/analyze?topic=${encodeURIComponent(topicToAnalyze)}`);
+    } else {
+      router.push('/analyze');
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-[var(--background)]">
+      
+      <div className="relative overflow-hidden">
+      
+        <div className="max-w-6xl mx-auto px-4 py-16 sm:py-24 relative">
+          <div className="text-center">
+            
+            <div className="relative mb-8">
+              <div className="flex items-center justify-center gap-4 mb-6">
+                <div className="relative">
+                  <div className="absolute inset-0 bg-[var(--accent)] rounded-xl blur-lg opacity-20"></div>
+                  <div className="relative w-16 h-16 bg-gradient-to-br from-[var(--accent)] to-[var(--accent-secondary)] rounded-xl flex items-center justify-center shadow-lg overflow-hidden">
+                    <Image 
+                      src="/logo.png" 
+                      alt="Lattice Logo" 
+                      width={40} 
+                      height={40}
+                      className="object-contain"
+                    />
                   </div>
+                </div>
+                <div>
+                  <h1 className="premium-header text-5xl sm:text-7xl tracking-tight bg-gradient-to-r from-[var(--foreground)] to-[var(--accent-secondary)] bg-clip-text text-transparent">
+                    Lattice
+                  </h1>
+                  <div className="text-sm sm:text-base text-[var(--accent)] font-medium tracking-wide uppercase">
+                    Multi-Perspective Analysis Platform
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <div className="max-w-4xl mx-auto mb-12">
+              <p className="text-xl sm:text-2xl text-[var(--text-secondary)] leading-relaxed mb-6">
+                Transform complex debates into structured insights. Lattice examines topics through 
+                <span className="text-[var(--accent)] font-medium"> multiple perspectives</span>, 
+                generating comprehensive analyses that reveal nuanced perspectives and hidden connections.
+              </p>
+              
+              
+              <div className="flex flex-wrap justify-center gap-6 text-sm font-medium">
+                <div className="flex items-center gap-2 text-[var(--text-secondary)]">
+                  <div className="w-2 h-2 bg-[var(--accent)] rounded-full"></div>
+                  <span>Academic Research</span>
+                </div>
+                <div className="flex items-center gap-2 text-[var(--text-secondary)]">
+                  <div className="w-2 h-2 bg-[var(--accent)] rounded-full"></div>
+                  <span>Policy Analysis</span>
+                </div>
+                <div className="flex items-center gap-2 text-[var(--text-secondary)]">
+                  <div className="w-2 h-2 bg-[var(--accent)] rounded-full"></div>
+                  <span>Critical Thinking</span>
+                </div>
+                <div className="flex items-center gap-2 text-[var(--text-secondary)]">
+                  <div className="w-2 h-2 bg-[var(--accent)] rounded-full"></div>
+                  <span>Analytical Reasoning</span>
+                </div>
+              </div>
+            </div>
+            
+            <div className="max-w-3xl mx-auto mb-16">
+              <div className="premium-card p-8 relative">
+                <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
+                  <div className="w-8 h-8 bg-[var(--accent)] rounded-full flex items-center justify-center">
+                    <Lightbulb className="w-4 h-4 text-white" />
+                  </div>
+                </div>
+                
+                <div className="text-center mb-6 pt-4">
+                  <h2 className="text-xl font-semibold text-[var(--foreground)] mb-2">
+                    Start Your Analysis
+                  </h2>
+                  <p className="text-sm text-[var(--text-secondary)]">
+                    Enter any complex topic, analytical question, or scenario for comprehensive multi-perspective analysis
+                  </p>
+                </div>
+                
+                <div className="relative mb-6">
                   <textarea
-                    value={inputText}
-                    onChange={(e) => setInputText(e.target.value)}
-                    placeholder="Enter any topic, scenario, or question you'd like analyzed from multiple perspectives."
-                    className="premium-textarea w-full h-28 p-4 text-base mt-2"
-                    disabled={state.isLoading}
+                    value={selectedTopic}
+                    onChange={(e) => setSelectedTopic(e.target.value)}
+                    placeholder="e.g., Should AI systems be allowed to make autonomous decisions in healthcare?"
+                    className="premium-textarea w-full h-32 p-5 text-base resize-none transition-all duration-200 focus:h-36"
+                    style={{
+                      background: 'linear-gradient(135deg, var(--input-bg) 0%, rgba(135, 187, 162, 0.02) 100%)'
+                    }}
                   />
-                  <div className="mt-5 mb-4">
-                    <div className="text-xs text-gray-500 mb-2 font-medium">Example topics:</div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      {exampleTopics.map((topic, index) => (
+                  <div className="absolute bottom-3 right-3 text-xs text-[var(--text-secondary)]">
+                    {selectedTopic.length}/500
+                  </div>
+                </div>
+                
+                <div className="space-y-4">
+                  <button
+                    onClick={() => handleStartAnalysis()}
+                    disabled={!selectedTopic.trim()}
+                    className="premium-btn px-8 py-4 flex items-center gap-3 text-lg font-semibold w-full justify-center group transition-all duration-200 hover:scale-[1.02] hover:shadow-lg"
+                  >
+                    <span>Begin Analysis</span>
+                    <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                  </button>
+                  
+                  <div className="text-center">
+                    <div className="text-xs text-[var(--text-secondary)] mb-3 font-medium">
+                      Or try a sample topic:
+                    </div>
+                    <div className="flex flex-wrap justify-center gap-2">
+                      {["AI in Healthcare", "Genetic Engineering", "Privacy vs Security"].map((topic, index) => (
                         <button
                           key={index}
-                          onClick={() => setInputText(topic)}
-                          className="text-left p-3 bg-[var(--input-bg)] hover:bg-[var(--accent-light)] rounded-lg text-[var(--foreground)] text-xs transition-colors border border-[var(--input-border)]"
+                          onClick={() => setSelectedTopic(exampleTopics[index])}
+                          className="px-3 py-1.5 text-xs bg-[var(--accent-light)]/20 text-[var(--accent)] rounded-full hover:bg-[var(--accent-light)]/30 transition-colors border border-[var(--accent)]/20"
                         >
                           {topic}
                         </button>
                       ))}
                     </div>
                   </div>
-                  <div className="flex justify-between items-center mt-6">
+                </div>
+              </div>
+            </div>
+
+            <div className="max-w-5xl mx-auto">
+              <div className="text-center mb-8">
+                <h3 className="text-lg font-semibold text-[var(--foreground)] mb-2">
+                  Explore Complex Debates
+                </h3>
+                <p className="text-sm text-[var(--text-secondary)]">
+                  See how Lattice breaks down nuanced topics across multiple analytical frameworks
+                </p>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {exampleTopics.slice(0, 6).map((topic, index) => {
+                  const categories = ["Healthcare Analysis", "Technology Policy", "Economic Theory", "Bioanalysis", "Corporate Law", "Digital Rights"];
+                    
+                  return (
                     <button
-                      onClick={analyzeScenario}
-                      disabled={!inputText.trim() || state.isLoading}
-                      className="premium-btn px-5 py-2 flex items-center gap-2 text-base ml-auto"
+                      key={index}
+                      onClick={() => handleStartAnalysis(topic)}
+                      className="text-left p-5 bg-[var(--surface-elevated)] hover:bg-[var(--card-bg)] rounded-xl border border-[var(--input-border)] hover:border-[var(--accent)]/50 transition-all duration-300 hover:shadow-lg hover:scale-[1.02] group"
                     >
-                      {state.isLoading ? (
-                        <>
-                          <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
-                          Analyzing...
-                        </>
-                      ) : (
-                        <>
-                          <MessageSquare className="w-4 h-4" />
-                          Begin Analysis
-                        </>
-                      )}
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="flex flex-col h-[70vh]">
-                  <div className="px-6 py-4 border-b premium-divider bg-[var(--card-bg)]">
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1">
-                        <h3 className="font-semibold text-[var(--foreground)] text-base mb-1">Current Analysis:</h3>
-                        <p className="text-gray-500 text-xs sm:text-sm">{state.scenario}</p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        
-                        <button
-                          onClick={() => handleExport('markdown')}
-                          disabled={isExporting !== null}
-                          className="bg-[var(--input-bg)] hover:bg-[var(--accent-light)] text-[var(--foreground)] px-3 py-2 rounded-lg text-xs font-medium border border-[var(--input-border)] flex items-center gap-2 transition-colors"
-                          title="Export as Markdown"
-                        >
-                          {isExporting === 'markdown' ? (
-                            <div className="animate-spin rounded-full h-3 w-3 border-2 border-[var(--foreground)] border-t-transparent"></div>
-                          ) : (
-                            <FileText className="w-3 h-3" />
-                          )}
-                          MD
-                        </button>
-                        <button
-                          onClick={() => handleExport('pdf')}
-                          disabled={isExporting !== null}
-                          className="bg-[var(--input-bg)] hover:bg-[var(--accent-light)] text-[var(--foreground)] px-3 py-2 rounded-lg text-xs font-medium border border-[var(--input-border)] flex items-center gap-2 transition-colors"
-                          title="Export as PDF"
-                        >
-                          {isExporting === 'pdf' ? (
-                            <div className="animate-spin rounded-full h-3 w-3 border-2 border-[var(--foreground)] border-t-transparent"></div>
-                          ) : (
-                            <Download className="w-3 h-3" />
-                          )}
-                          PDF
-                        </button>
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => {
-                              setShowMermaidDiagram(!showMermaidDiagram);
-                              if (!showMermaidDiagram) {
-                                setChatCollapsed(true);
-                              }
-                            }}
-                            className={`px-4 py-2 rounded-lg text-xs font-medium flex items-center gap-2 transition-colors ${
-                              showMermaidDiagram 
-                                ? 'bg-[var(--accent)] text-white' 
-                                : 'bg-[var(--input-bg)] hover:bg-[var(--accent-light)] text-[var(--foreground)] border border-[var(--input-border)]'
-                            }`}
-                          >
-                            <TreePine className="w-4 h-4" />
-                            {showMermaidDiagram ? 'Hide Diagram' : 'Show Diagram'}
-                          </button>
-                          {state.hasAnalysis && (
-                            <>
-                              <select
-                                value={diagramType}
-                                onChange={(e) => setDiagramType(e.target.value as 'traditional' | 'ai-generated')}
-                                className="px-3 py-2 rounded-lg text-xs bg-[var(--input-bg)] text-[var(--foreground)] border border-[var(--input-border)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)] min-w-[120px]"
-                              >
-                                <option value="traditional">Traditional</option>
-                                <option value="ai-generated">AI-Generated</option>
-                              </select>
-                              {diagramType === 'ai-generated' && (
-                                <select
-                                  value={aiDiagramType}
-                                  onChange={(e) => setAiDiagramType(e.target.value as 'argument-flow' | 'stakeholder-analysis' | 'decision-tree' | 'process-flow')}
-                                  className="px-3 py-2 rounded-lg text-xs bg-[var(--input-bg)] text-[var(--foreground)] border border-[var(--input-border)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)] min-w-[140px]"
-                                >
-                                  <option value="argument-flow">Argument Flow</option>
-                                  <option value="stakeholder-analysis">Stakeholder Analysis</option>
-                                  <option value="decision-tree">Decision Tree</option>
-                                  <option value="process-flow">Process Flow</option>
-                                </select>
-                              )}
-                            </>
-                          )}
+                      <div className="flex items-start gap-3 mb-3">
+                        <div className="w-8 h-8 bg-[var(--accent)]/10 rounded-lg flex items-center justify-center flex-shrink-0">
+                          <Target className="w-4 h-4 text-[var(--accent)]" />
                         </div>
-                        <button
-                          onClick={fetchReadingSuggestions}
-                          disabled={state.readingSuggestions?.isLoading}
-                          className="bg-[var(--accent)] hover:bg-[var(--accent)]/90 text-white px-4 py-2 rounded-lg text-xs font-medium flex items-center gap-2 transition-colors"
-                        >
-                          {state.readingSuggestions?.isLoading ? (
-                            <>
-                              <div className="animate-spin rounded-full h-3 w-3 border-2 border-white border-t-transparent"></div>
-                              Loading...
-                            </>
-                          ) : (
-                            <>
-                              <BookOpen className="w-4 h-4" />
-                              Get Readings
-                            </>
-                          )}
-                        </button>
-                        <button
-                          onClick={resetDebate}
-                          className="bg-[var(--input-bg)] hover:bg-[var(--accent-light)] text-[var(--foreground)] px-4 py-2 rounded-lg text-xs font-medium border border-[var(--input-border)] flex items-center gap-2"
-                        >
-                          <RotateCcw className="w-4 h-4" />
-                          New Analysis
-                        </button>
+                        <div className="flex-1">
+                          <div className="text-xs text-[var(--accent)] font-medium mb-1">
+                            {categories[index]}
+                          </div>
+                          <h4 className="text-sm font-medium text-[var(--foreground)] line-clamp-2 group-hover:text-[var(--accent)] transition-colors">
+                            {topic}
+                          </h4>
+                        </div>
                       </div>
-                    </div>
-                  </div>
-                  <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar bg-[var(--card-bg)]">
-                    {state.messages.map((message, index) => {
-                      const isExpanded = expandedMessages.has(index);
-                      const isInitialAnalysis = index === 0 && message.role === 'assistant';
-                      const parsedContent = isInitialAnalysis ? parseResponse(message.content) : null;
                       
-                      return (
-                        <div
-                          key={index}
-                          className={`flex gap-4 message-enter ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                        >
-                          {message.role === 'assistant' && (
-                            <div className="w-9 h-9 bg-[var(--accent-light)] flex items-center justify-center rounded-full flex-shrink-0">
-                              <Bot className="w-5 h-5 text-[var(--accent)]" />
-                            </div>
-                          )}
-                          <div
-                            className={`max-w-2xl rounded-xl p-4 ${
-                              message.role === 'user'
-                                ? 'bg-[var(--accent)] text-white ml-10'
-                                : 'bg-[var(--input-bg)] text-[var(--foreground)] border border-[var(--input-border)]'
-                            }`}
-                          >
-                            {isInitialAnalysis && parsedContent ? (
-                              <div>
-                                <div className="mb-3">
-                                  <h4 className="font-semibold text-sm mb-2 text-[var(--accent)]">Summary</h4>
-                                  <div className="whitespace-pre-wrap leading-relaxed text-sm">
-                                    {parsedContent.summary}
-                                  </div>
-                                </div>
-                                
-                                <button
-                                  onClick={() => toggleMessageExpansion(index)}
-                                  className="flex items-center gap-2 text-[var(--accent)] hover:text-[var(--accent)] text-sm font-medium transition-colors"
-                                >
-                                  {isExpanded ? (
-                                    <>
-                                      <ChevronUp className="w-4 h-4" />
-                                      Hide Detailed Analysis
-                                    </>
-                                  ) : (
-                                    <>
-                                      <ChevronDown className="w-4 h-4" />
-                                      Show Detailed Analysis
-                                    </>
-                                  )}
-                                </button>
-                                
-                                {isExpanded && (
-                                  <div className="mt-4 pt-4 border-t border-[var(--input-border)]">
-                                    <div className="whitespace-pre-wrap leading-relaxed text-sm">
-                                      {parsedContent.detailed}
-                                    </div>
-                                  </div>
-                                )}
-                                
-                                {showArgumentTree && message.argumentTree && (
-                                  <div className="mt-4 pt-4 border-t border-[var(--input-border)]">
-                                    <ArgumentTreeComponent argumentTree={message.argumentTree} />
-                                  </div>
-                                )}
-                              </div>
-                            ) : (
-                              <div>
-                                <div className="whitespace-pre-wrap leading-relaxed text-sm sm:text-base">
-                                  {message.content}
-                                </div>
-                                {showArgumentTree && message.argumentTree && (
-                                  <div className="mt-4 pt-4 border-t border-[var(--input-border)]">
-                                    <ArgumentTreeComponent argumentTree={message.argumentTree} />
-                                  </div>
-                                )}
-                              </div>
-                            )}
-                            
-                            <div className={`text-xs mt-2 ${
-                              message.role === 'user' ? 'text-blue-100' : 'text-gray-400'
-                            }`}>
-                              {message.timestamp.toLocaleTimeString()}
-                            </div>
-                          </div>
-                          {message.role === 'user' && (
-                            <div className="w-9 h-9 bg-[var(--accent-light)] flex items-center justify-center rounded-full flex-shrink-0">
-                              <User className="w-5 h-5 text-[var(--accent)]" />
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                    {state.isLoading && (
-                      <div className="flex gap-4 justify-start message-enter">
-                        <div className="w-9 h-9 bg-[var(--accent-light)] flex items-center justify-center rounded-full flex-shrink-0">
-                          <Bot className="w-5 h-5 text-[var(--accent)]" />
-                        </div>
-                        <div className="bg-[var(--input-bg)] rounded-xl p-4 border border-[var(--input-border)]">
-                          <div className="flex items-center gap-3">
-                            <div className="animate-spin rounded-full h-4 w-4 border-2 border-[var(--accent)] border-t-transparent"></div>
-                            <span className="text-gray-500">Analyzing and formulating response...</span>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                    <div ref={messagesEndRef} />
-                  </div>
-                  <div className="px-6 py-4 border-t premium-divider bg-[var(--card-bg)]">
-                    <div className="flex gap-3">
-                      <input
-                        type="text"
-                        value={followUpQuestion}
-                        onChange={(e) => setFollowUpQuestion(e.target.value)}
-                        onKeyPress={(e) => e.key === 'Enter' && askFollowUp()}
-                        placeholder="Ask a follow-up question or request deeper analysis..."
-                        className="premium-input flex-1 p-3 text-base"
-                        disabled={state.isLoading}
-                      />
-                      <button
-                        onClick={askFollowUp}
-                        disabled={!followUpQuestion.trim() || state.isLoading}
-                        className="premium-btn px-5 py-2 flex items-center gap-2 text-base"
-                      >
-                        <Send className="w-4 h-4" />
-                        Send
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </div>
-
-          
-          {showMermaidDiagram && state.hasAnalysis && state.scenario && (
-            <div className={`transition-all duration-300 ${
-              chatCollapsed ? 'w-2/3' : 'w-1/2'
-            } flex-shrink-0`}>
-              <MermaidArgumentDiagram
-                argumentTree={diagramType === 'traditional' ? state.messages[0]?.argumentTree : undefined}
-                topic={state.scenario}
-                useAI={diagramType === 'ai-generated'}
-                diagramType={aiDiagramType}
-                onClose={() => {
-                  setShowMermaidDiagram(false);
-                  setChatCollapsed(false);
-                }}
-                className="h-[85vh]"
-              />
-            </div>
-          )}
-
-          
-          {state.readingSuggestions && !showMermaidDiagram && (
-            <div className="w-80 flex-shrink-0">
-              <ReadingSuggestions 
-                suggestions={state.readingSuggestions}
-                onClose={closeReadingSuggestions}
-              />
-            </div>
-          )}
         </div>
       </div>
+
+      <div className="py-24 bg-[var(--card-bg)]">
+        <div className="max-w-6xl mx-auto px-4">
+          <div className="mb-20">
+            <h2 className="text-3xl font-bold text-[var(--foreground)] mb-4">
+              Comprehensive Analysis Tools
+            </h2>
+            <p className="text-lg text-[var(--text-secondary)] max-w-2xl leading-relaxed">
+              Every analysis includes multiple perspectives, visual insights, and research recommendations. 
+              Experience sophisticated AI-powered reasoning across different analytical frameworks.
+            </p>
+          </div>
+
+          <div className="space-y-16">
+            {features.map((feature, index) => {
+              const enhancedDescriptions = [
+                "Examine complex topics through consequence-based, rule-based, character-based, and practical frameworks. Get nuanced insights that consider multiple stakeholder perspectives and analytical dimensions.",
+                "Interactive diagrams that visualize argument structures and relationships between ideas. Export as Mermaid diagrams or view in real-time with AI-generated visual representations.",
+                "AI-powered suggestions for relevant articles, papers, and resources to deepen your understanding. Curated from academic databases and trusted sources."
+              ];
+              
+              return (
+                <div key={index} className={`flex items-start gap-12 ${index % 2 === 1 ? 'flex-row-reverse' : ''}`}>
+                  <div className="flex-1 space-y-6">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 bg-[var(--accent)] rounded-lg flex items-center justify-center">
+                        <feature.icon className="w-6 h-6 text-white" />
+                      </div>
+                      <div>
+                        <h3 className="text-xl font-semibold text-[var(--foreground)]">
+                          {feature.title}
+                        </h3>
+                      </div>
+                    </div>
+                    
+                    <p className="text-[var(--text-secondary)] leading-relaxed text-base">
+                      {enhancedDescriptions[index]}
+                    </p>
+                    
+                    <div className="flex gap-3 text-sm">
+                      {[
+                        ["Multi-Perspective", "Visual Mapping", "Research Discovery"][index % 3],
+                        ["Consequence-Based", "Interactive", "Curated Sources"][index % 3],
+                        ["Rule-Based", "Exportable", "Academic Papers"][index % 3]
+                      ].filter(Boolean).map((tag, tagIndex) => (
+                        <span key={tagIndex} className="px-3 py-1 bg-[var(--accent)]/10 text-[var(--accent)] rounded-full text-xs font-medium">
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  
+                  <div className="flex-1">
+                    <div className="w-full h-80 bg-[var(--background)] rounded-xl border border-[var(--input-border)] overflow-hidden">
+                      <Image
+                        src={`/${['analysis', 'diagram', 'readings'][index]}.png`}
+                        alt={`${feature.title} Preview`}
+                        width={600}
+                        height={320}
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      <Footer />
     </div>
   );
 }

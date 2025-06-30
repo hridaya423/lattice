@@ -1,14 +1,14 @@
-# Topic Analyzer
+# Lattice
 
 A sophisticated AI-powered application that analyzes complex topics from multiple perspectives, plays devil's advocate, and provides comprehensive moral reasoning with real-time web research capabilities.
 
 ## 🧠 Features
 
-- **Multi-Perspective Analysis**: Get viewpoints from various ethical frameworks (utilitarian, deontological, virtue ethics, etc.)
+- **Multi-Perspective Analysis**: Get viewpoints from various perspectives
 - **Devil's Advocate**: AI challenges each position with counterarguments
 - **Stakeholder Analysis**: Identifies all parties affected by ethical decisions
 - **Interactive Chat**: Ask follow-up questions and dive deeper into specific aspects
-- **Real-time Reading Suggestions**: Find relevant articles, research papers, and resources from across the web
+- **Real-time Reading Suggestions**: Find relevant articles, research papers, and resources from across the web using Serper Google Search API
 - **Argument Tree**: Visualize the argument tree of the topic
 
 ## 🚀 Getting Started
@@ -17,14 +17,14 @@ A sophisticated AI-powered application that analyzes complex topics from multipl
 
 - Node.js 18+ and npm
 - A Groq API key (get one at [Groq Console](https://console.groq.com/))
-- A Firecrawl API key (get one at [Firecrawl](https://firecrawl.dev/)) for reading suggestions
+- A Serper API key (get one at [Serper.dev](https://serper.dev/)) for readinpg suggestions
 
 ### Installation
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/hridaya423/topicanalyzer.git
-   cd topicanalyzer
+   git clone https://github.com/hridaya423/lattice.git
+   cd lattice
    ```
 
 2. **Install dependencies**
@@ -36,7 +36,7 @@ A sophisticated AI-powered application that analyzes complex topics from multipl
    Create a `.env.local` file in the root directory:
    ```env
    GROQ_API_KEY=your_groq_api_key_here
-   FIRECRAWL_API_KEY=your_firecrawl_api_key_here
+   SERPER_API_KEY=your_serper_api_key_here
    ```
 
 4. **Run the development server**
@@ -48,3 +48,4 @@ npm run dev
    Navigate to [http://localhost:3000](http://localhost:3000)
 
 
+Some AI was used in the making of this project, mainly by copilot/cursor suggestions/autocomplete, some bug fixes, and the logo.

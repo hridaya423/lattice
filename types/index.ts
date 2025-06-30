@@ -50,9 +50,9 @@ export interface ArgumentNode {
   id: string;
   text: string;
   type: 'supporting' | 'opposing' | 'neutral' | 'evidence' | 'counterargument';
-  framework?: 'utilitarian' | 'deontological' | 'virtue' | 'practical' | 'stakeholder' | 
+  framework?: 'consequence-based' | 'rule-based' | 'character-based' | 'practical' | 'stakeholder' | 
              'legal' | 'emotional' | 'economic' | 'social' | 'individual' | 'collective' | 'contextual';
-  strength?: number; // 1-5 scale
+  strength?: number; 
   children: ArgumentNode[];
   parent?: string;
   level: number;
