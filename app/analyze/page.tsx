@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, Suspense } from 'react';
 import { Send, MessageSquare, User, Bot, RotateCcw, Lightbulb, ChevronDown, ChevronUp, BookOpen, Download, FileText, TreePine } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 import { Message, ConversationState } from '../../types';
@@ -10,7 +10,7 @@ import MermaidArgumentDiagram from '../components/MermaidArgumentDiagram';
 import Footer from '../components/Footer';
 import { exportToMarkdown, exportToPDF } from '../utils/exportUtils';
 
-export default function AnalyzePage() {
+function AnalyzePageContent() {
   const searchParams = useSearchParams();
   const [state, setState] = useState<ConversationState>({
     scenario: null,
@@ -653,5 +653,24 @@ export default function AnalyzePage() {
       
       <Footer />
     </div>
+  );
+}
+
+function LoadingFallback() {
+  return (
+    <div className="min-h-screen bg-[var(--background)] flex items-center justify-center">
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-2 border-[var(--accent)] border-t-transparent mx-auto mb-4"></div>
+        <p className="text-[var(--text-secondary)]">Loading analysis...</p>
+      </div>
+    </div>
+  );
+}
+
+export default function AnalyzePage() {
+  return (
+    <Suspense fallback={<LoadingFallback />}>
+      <AnalyzePageContent />
+    </Suspense>
   );
 }
