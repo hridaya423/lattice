@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { X, Maximize2, Minimize2, Download, Eye, Code, RefreshCw, Loader2, Plus, Minus } from 'lucide-react';
-import MermaidRenderer from './MermaidRenderer';
+import MermaidRenderer, { MermaidRendererRef } from './MermaidRenderer';
 
 interface MermaidArgumentDiagramProps {
   topic?: string;
@@ -35,6 +35,7 @@ const MermaidArgumentDiagram: React.FC<MermaidArgumentDiagramProps> = ({
   const [activeTab, setActiveTab] = useState<'visual' | 'code'>('visual');
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const mermaidRendererRef = useRef<MermaidRendererRef>(null);
 
   const generateAIDiagram = async () => {
     if (!topic) return;
@@ -139,16 +140,10 @@ const MermaidArgumentDiagram: React.FC<MermaidArgumentDiagramProps> = ({
   };
 
 
-  const downloadDiagram = () => {
-    const blob = new Blob([mermaidCode], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${diagramType}-diagram.mmd`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+  const downloadDiagram = async () => {
+    if (mermaidRendererRef.current) {
+      await mermaidRendererRef.current.exportAsPNG();
+    }
   };
 
   const copyToClipboard = async () => {
@@ -235,7 +230,7 @@ const MermaidArgumentDiagram: React.FC<MermaidArgumentDiagramProps> = ({
               onClick={downloadDiagram}
               disabled={!mermaidCode || isGenerating}
               className="p-2 text-[var(--text-secondary)] hover:text-[var(--foreground)] hover:bg-[var(--input-bg)] rounded-lg transition-colors disabled:opacity-50"
-              title="Download Mermaid Code"
+              title="Download Diagram as PNG"
             >
               <Download className="w-4 h-4" />
             </button>
@@ -315,6 +310,7 @@ const MermaidArgumentDiagram: React.FC<MermaidArgumentDiagramProps> = ({
             
             {mermaidCode && !isGenerating && !error && (
               <MermaidRenderer 
+                ref={mermaidRendererRef}
                 chart={mermaidCode} 
                 className="h-full w-full"
               />

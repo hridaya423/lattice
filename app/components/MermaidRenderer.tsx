@@ -1,6 +1,7 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 'use client';
 
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback, forwardRef, useImperativeHandle } from 'react';
 import mermaid from 'mermaid';
 import domtoimage from 'dom-to-image';
 import { ZoomIn, ZoomOut, RotateCcw, Image, FileText, CheckCircle, AlertCircle } from 'lucide-react';
@@ -16,7 +17,13 @@ interface ToastState {
   type: 'success' | 'error';
 }
 
-const MermaidRenderer: React.FC<MermaidRendererProps> = ({ chart, className = '' }) => {
+export interface MermaidRendererRef {
+  exportAsPNG: () => Promise<void>;
+  exportMermaidCode: () => void;
+  autoFitDiagram: () => void;
+}
+
+const MermaidRenderer = forwardRef<MermaidRendererRef, MermaidRendererProps>(({ chart, className = '' }, ref) => {
   const elementRef = useRef<HTMLDivElement>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -132,19 +139,71 @@ const MermaidRenderer: React.FC<MermaidRendererProps> = ({ chart, className = ''
       }
 
       
+      const originalStyle = {
+        width: svgElement.style.width,
+        height: svgElement.style.height,
+        maxWidth: svgElement.style.maxWidth,
+        transform: svgElement.style.transform
+      };
+
+      
+      let actualWidth = svgElement.clientWidth;
+      let actualHeight = svgElement.clientHeight;
+
+      
+      try {
+        const viewBox = svgElement.getAttribute('viewBox');
+        if (viewBox) {
+          const [, , vbWidth, vbHeight] = viewBox.split(' ').map(Number);
+          if (vbWidth && vbHeight) {
+            actualWidth = vbWidth;
+            actualHeight = vbHeight;
+          }
+        }
+
+        
+        const bbox = svgElement.getBBox();
+        if (bbox.width > actualWidth) actualWidth = bbox.width;
+        if (bbox.height > actualHeight) actualHeight = bbox.height;
+      } catch (bboxError) {
+        console.warn('Could not get SVG bounding box, using client dimensions');
+      }
+
+      
+      svgElement.style.width = actualWidth + 'px';
+      svgElement.style.height = actualHeight + 'px';
+      svgElement.style.maxWidth = 'none';
+      svgElement.style.transform = 'none';
+
+      
+      await new Promise(resolve => setTimeout(resolve, 50));
+
+      
+      const scale = Math.min(2, 6000 / Math.max(actualWidth, actualHeight));
+      const finalWidth = Math.min(actualWidth * scale, 6000);
+      const finalHeight = Math.min(actualHeight * scale, 6000);
+
+      
       const dataUrl = await domtoimage.toPng(svgElement, {
         quality: 1.0,
         bgcolor: 'white',
-        width: Math.min(svgElement.clientWidth * 2, 4000), 
-        height: Math.min(svgElement.clientHeight * 2, 4000), 
+        width: finalWidth,
+        height: finalHeight,
         style: {
-          transform: 'scale(2)',
+          transform: `scale(${scale})`,
           transformOrigin: 'top left',
-          width: svgElement.clientWidth + 'px',
-          height: svgElement.clientHeight + 'px'
+          width: actualWidth + 'px',
+          height: actualHeight + 'px'
         },
-        cacheBust: true
+        cacheBust: true,
+        imagePlaceholder: undefined
       });
+
+      
+      svgElement.style.width = originalStyle.width;
+      svgElement.style.height = originalStyle.height;
+      svgElement.style.maxWidth = originalStyle.maxWidth;
+      svgElement.style.transform = originalStyle.transform;
       
       if (!dataUrl || dataUrl === 'data:,') {
         throw new Error('Failed to generate image data');
@@ -273,6 +332,13 @@ const MermaidRenderer: React.FC<MermaidRendererProps> = ({ chart, className = ''
             
             svgElement.setAttribute('role', 'img');
             svgElement.setAttribute('aria-label', 'Mermaid diagram');
+            
+            
+            setTimeout(() => {
+              if (zoom === 100) {
+                autoFitDiagram();
+              }
+            }, 100);
           }
         }
         setIsLoading(false);
@@ -311,6 +377,13 @@ const MermaidRenderer: React.FC<MermaidRendererProps> = ({ chart, className = ''
   const handleResetZoom = useCallback(() => {
     setZoom(100);
   }, []);
+
+  
+  useImperativeHandle(ref, () => ({
+    exportAsPNG,
+    exportMermaidCode,
+    autoFitDiagram
+  }), [exportAsPNG, exportMermaidCode, autoFitDiagram]);
 
   
   useEffect(() => {
@@ -452,6 +525,8 @@ const MermaidRenderer: React.FC<MermaidRendererProps> = ({ chart, className = ''
       />
     </div>
   );
-};
+});
+
+MermaidRenderer.displayName = 'MermaidRenderer';
 
 export default MermaidRenderer;
