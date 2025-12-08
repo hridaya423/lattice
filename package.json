@@ -29,7 +29,7 @@
     "@tailwindcss/postcss": "^4",
     "@types/dom-to-image": "^2.6.7",
     "@types/file-saver": "^2.0.7",
-    "@types/node": "^20.17.51",
+    "@types/node": "^24.10.1",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
