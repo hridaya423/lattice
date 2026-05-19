@@ -22,7 +22,7 @@
     "react": "^19.2.6",
     "react-dom": "^19.2.5",
     "serper": "^1.0.6",
-    "ws": "^8.20.0"
+    "ws": "^8.20.1"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
